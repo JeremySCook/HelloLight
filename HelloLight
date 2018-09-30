@@ -1,0 +1,188 @@
+/****************************************
+Jeremy S. Cook 8/25/2018 to power two RGBW strips (arranged GRBW in this case)
+set up to be reactive to microphone input.
+
+Code used from:
+Example Sound Level Sketch for the 
+Adafruit Microphone Amplifier
+and RGBWstrantest example
+****************************************/
+
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+#include <avr/power.h>
+#endif
+
+const int sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
+unsigned int sample;
+int DIP2 = 0;
+int DIP3 = 0;
+int DIP4 = 0;
+int DIP5 = 0;
+
+byte neopix_gamma[] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+    1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+    2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
+
+//define pins for RGBW LEDs:
+
+#define PINRGBW1  7
+//#define PINRGBW2  8
+
+#define NUMPIXELSRGBW1  12
+//#define NUMPIXELSRGBW2  6
+
+Adafruit_NeoPixel RGBW1 = Adafruit_NeoPixel(NUMPIXELSRGBW1, PINRGBW1, NEO_RGBW + NEO_KHZ800);
+//Adafruit_NeoPixel RGBW2 = Adafruit_NeoPixel(NUMPIXELSRGBW2, PINRGBW2, NEO_RGBW + NEO_KHZ800);
+
+void setup() 
+{
+   Serial.begin(9600);
+   RGBW1.begin(); //Initializes NeoPixel library for RGBW1
+   //RGBW2.begin(); //Initialize NeoPixel library for second strip
+   pinMode(2, INPUT_PULLUP); //4-position DIP switch
+   pinMode(3, INPUT_PULLUP); 
+   pinMode(4, INPUT_PULLUP); 
+   pinMode(5, INPUT_PULLUP); 
+}
+
+void loop()
+{
+  DIP2 = digitalRead(2);
+  DIP3 = digitalRead(3);
+  DIP4 = digitalRead(4);
+  DIP5 = digitalRead(5);
+  if (DIP5 == LOW) soundReact();
+  else if (DIP3 == LOW) pulseWhite(5); 
+  else if (DIP2 == LOW) randomColors();
+  //DIP4 turns on high limit as part of soundReact();
+}
+
+void soundReact(){
+   unsigned long startMillis= millis();  // Start of sample window
+   unsigned int peakToPeak = 0;   // peak-to-peak level
+
+   unsigned int signalMax = 0;
+   unsigned int signalMin = 1024;
+
+   // collect data for 50 mS
+   while (millis() - startMillis < sampleWindow)
+   {
+      sample = analogRead(3);
+      if (sample < 1024)  // toss out spurious readings
+      {
+         if (sample > signalMax)
+         {
+            signalMax = sample;  // save just the max levels
+         }
+         else if (sample < signalMin)
+         {
+            signalMin = sample;  // save just the min levels
+         }
+      }
+   }
+   peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude  
+   int displayPeak = map(peakToPeak, 20, 250, 0, NUMPIXELSRGBW1);
+   //neopixel routines
+   for(int i=0;i<NUMPIXELSRGBW1;i++){
+   RGBW1.setPixelColor(i, RGBW1.Color(0,0,0,0)); //set initial color to zero
+   }
+   
+   if(displayPeak > 2){ 
+    RGBW1.setPixelColor(0, RGBW1.Color(100,0,0,0)); // Moderately bright green color (Green, Red, Blue, White
+    RGBW1.setPixelColor(6, RGBW1.Color(100,0,0,0)); // Moderately bright green color
+   }
+   if(displayPeak > 3){
+    RGBW1.setPixelColor(1, RGBW1.Color(100,0,0,0)); // Moderately bright green color
+    RGBW1.setPixelColor(7, RGBW1.Color(100,0,0,0)); // Moderately bright green color
+   }
+   if(displayPeak > 5){ 
+    RGBW1.setPixelColor(2, RGBW1.Color(50,50,0,0)); // Moderately bright yellow color
+    RGBW1.setPixelColor(8, RGBW1.Color(50,50,0,0)); // Moderately bright yellow color
+   }
+   if(displayPeak > 7){
+    RGBW1.setPixelColor(3, RGBW1.Color(50,50,0,0)); // Moderately bright yellow color
+    RGBW1.setPixelColor(9, RGBW1.Color(50,50,0,0)); // Moderately bright yellow color
+   }
+   if(displayPeak > 8){
+    RGBW1.setPixelColor(4, RGBW1.Color(25,75,0,0)); // Moderately bright orange color
+    RGBW1.setPixelColor(10, RGBW1.Color(25,75,0,0)); // Moderately bright orange color
+   }
+   if(displayPeak > 9){
+    RGBW1.setPixelColor(5, RGBW1.Color(0,100,0,0)); // Moderately bright red color
+    RGBW1.setPixelColor(11, RGBW1.Color(0,100,0,0)); // Moderately bright red color
+   }
+   if(displayPeak > 11 && DIP4 == LOW){
+    for(int i = 0; i < 3600; i++){
+        for(int j = 0; j <RGBW1.numPixels(); j++){
+          RGBW1.setPixelColor(j, RGBW1.Color(0,127,0,0));
+        }
+        RGBW1.show();
+        delay(500);
+        for(int j = 0; j <RGBW1.numPixels(); j++){
+          RGBW1.setPixelColor(j, RGBW1.Color(0,0,127,0));
+        }
+        RGBW1.show();
+        delay(500);
+   }
+   }
+   RGBW1.show();
+   Serial.print(peakToPeak);
+   Serial.print(" -- ");
+   Serial.println(displayPeak);
+   delay(50);
+}
+
+void randomColors(){
+  randomSeed(analogRead(0));
+  for(int i = 0; i <240; i++){
+    int randomLight = random(12);
+    int randomGreen = random(256);
+    int randomRed = random(256);
+    int randomBlue = random(256);
+    int randomWhite = random(25);
+    if (randomGreen < randomRed && randomGreen < randomBlue) randomGreen = 0;
+    if (randomRed < randomGreen && randomRed < randomBlue) randomRed = 0;
+    if (randomBlue < randomRed && randomBlue < randomGreen) randomBlue = 0; 
+    RGBW1.setPixelColor(randomLight, RGBW1.Color(randomGreen,randomRed,randomBlue,randomWhite)); //sets random color and light - note GRBW strip
+    RGBW1.show();
+    delay(250);
+  }
+  for(int j = 0; j <RGBW1.numPixels(); j++){
+    RGBW1.setPixelColor(j, RGBW1.Color(0,0,0,0));
+  }
+  RGBW1.show();
+}
+
+void pulseWhite(uint8_t wait) {
+  for(int j = 0; j < 256 ; j++){
+      for(uint16_t i=0; i<RGBW1.numPixels(); i++) {
+          RGBW1.setPixelColor(i, RGBW1.Color(0,0,0,neopix_gamma[j] ) );
+        }
+        delay(wait);
+        RGBW1.show();
+      }
+  delay(1000);
+
+  for(int j = 255; j >= 0 ; j--){
+      for(uint16_t i=0; i<RGBW1.numPixels(); i++) {
+          RGBW1.setPixelColor(i, RGBW1.Color(0,0,0,neopix_gamma[j] ) );
+        }
+        delay(wait);
+        RGBW1.show();
+      }
+}
